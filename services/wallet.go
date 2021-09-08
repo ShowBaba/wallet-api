@@ -16,9 +16,10 @@ import "C"
 
 import (
 	m "go/wallet-api/models"
+	h "go/wallet-api/helpers"
 	// "go/wallet-api/protos/bitcoin"
 
-	"github.com/tyler-smith/go-bip39"
+	// "github.com/tyler-smith/go-bip39"
 	// "github.com/golang/protobuf/proto"
 
 	// eth
@@ -28,228 +29,42 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	// "github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/params"
+	// "github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/sha3"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	
 	"math/big"
 	"crypto/ecdsa"
 	// "bytes"
-	"unsafe"
+	// "unsafe"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"errors"
-	"strings"
+	// "math"
+	// "strings"
 	"strconv"
 	"context"
 )
-
-// Go byte[] -> C.TWData
-func TWDataCreateWithGoBytes(d []byte) unsafe.Pointer {
-	cBytes := C.CBytes(d)
-	defer C.free(unsafe.Pointer(cBytes))
-	data := C.TWDataCreateWithBytes((*C.uchar)(cBytes), C.ulong(len(d)))
-	return data
-}
-
-// C.TWData -> Go hex string
-func TWDataHexString(d unsafe.Pointer) string {
-	return hex.EncodeToString(TWDataGoBytes(d))
-}
-
-
-// Go string -> C.TWString
-func TWStringCreateWithGoString(s string) unsafe.Pointer {
-	cStr := C.CString(s)
-	defer C.free(unsafe.Pointer(cStr))
-	str := C.TWStringCreateWithUTF8Bytes(cStr)
-	return str
-}
-
-// C.TWData -> Go byte[]
-func TWDataGoBytes(d unsafe.Pointer) []byte {
-	cBytes := C.TWDataBytes(d)
-	cSize := C.TWDataSize(d)
-	return C.GoBytes(unsafe.Pointer(cBytes), C.int(cSize))
-}
-
-func TWStringGoString(s unsafe.Pointer) string {
-	return C.GoString(C.TWStringUTF8Bytes(s))
-}
-
-func GenerateMnemonic() (*string, error) {
-	// Generate a mnemonic for memorization or user-friendly seeds
-	entropy, err := bip39.NewEntropy(128)
-	if err != nil {
-		return nil, err
-	}
-	mnemonic, err := bip39.NewMnemonic(entropy)
-	if err != nil {
-		return nil, err
-	}
-	return &mnemonic, nil
-}
-
-// MnemonicIsValid checks if given string is a valid mnemonic phrase.
-func MnemonicIsValid(mnemonic string) bool {
-	cValid := C.TWMnemonicIsValid(TWStringCreateWithGoString(mnemonic))
-
-	return bool(cValid)
-}
-
-//GetWeiBalance the balance in wei for a given address
-func GetWeiBalance(address string, client *ethclient.Client) (*big.Int, error) {
-	account := common.HexToAddress(address)
-	balance, err := client.BalanceAt(context.Background(), account, nil)
-	if err != nil {
-		return nil, err
-	}
-	return balance, nil
-}
-
-// ParseBigFloat parse string value to big.Float
-func ParseBigFloat(value string) (*big.Float, error) {
-	f := new(big.Float)
-	f.SetPrec(236)  //  IEEE 754 octuple-precision binary floating-point format: binary256
-	f.SetMode(big.ToNearestEven)
-	_, err := fmt.Sscan(value, f)
-	return f, err
-}
-
-// convert eth to wei
-func etherToWei(eth *big.Float) *big.Int {
-	truncInt, _ := eth.Int(nil)
-	truncInt = new(big.Int).Mul(truncInt, big.NewInt(params.Ether))
-	fracStr := strings.Split(fmt.Sprintf("%.18f", eth), ".")[1]
-	fracStr += strings.Repeat("0", 18 - len(fracStr))
-	fracInt, _ :=  new(big.Int).SetString(fracStr, 10)
-	wei := new(big.Int).Add(truncInt, fracInt)
-	return wei;
-}
-
-func FloatToBigInt(val float64) *big.Int {
-	bigval := new(big.Float)
-	bigval.SetFloat64(val)
-	// Set precision if required.
-	// bigval.SetPrec(64)
-
-	coin := new(big.Float)
-	coin.SetInt(big.NewInt(1000000000000000000))
-
-	bigval.Mul(bigval, coin)
-
-	result := new(big.Int)
-	bigval.Int(result) // store converted number in result
-
-	return result
-
-
-}
-
-// func CreateSeed() interface{}	 {
-	
-// 	var r m.Wallet
-// 	// seedStruct := &Seed{}
-// 	// generate mnemonics
-// 	mnemonic, err := GenerateMnemonic()
-// 	if err != nil {
-// 		// return nil, err
-// 		log.Println(err)
-// 	}
-// 	// convert mnemonic from Go String to C.TWString
-// 	str := TWStringCreateWithGoString(*mnemonic);
-// 	empty := TWStringCreateWithGoString("")
-// 	defer C.TWStringDelete(str)
-// 	defer C.TWStringDelete(empty)
-
-// 	r.Mnemonic = *mnemonic
-	
-// 	// verify if mnemonic is valid
-// 	isValidMnemonic := MnemonicIsValid(*mnemonic)
-// 	// if isValidMnemonic == false {
-// 	// 	return "Invalid mnemonic", error
-// 	// }
-
-// 	r.IsValidMnemonic = isValidMnemonic
-
-// 	// else create wallet from mnemonic
-// 	wallet := C.TWHDWalletCreateWithMnemonic(str, empty)
-// 	defer C.TWHDWalletDelete(wallet)
-
-// 	// get wallet seed
-// 	walletSeed := C.TWHDWalletSeed(wallet)
-// 	walletSeedHex := hex.EncodeToString(TWDataGoBytes(walletSeed))
-// 	// fmt.Println("wallet seed: ", walletSeedHex)
-
-// 	r.Seed = walletSeedHex
-
-// 	// gwt wallet mnemonic - just to verfy 
-// 	walletMnemonic := C.TWHDWalletMnemonic(wallet)
-// 	// fmt.Println("wallet mnemonic  : ", TWStringGoString(walletMnemonic))
-
-// 	r.ConfirmMnemonic = TWStringGoString(walletMnemonic)
-// 	// fmt.Println(TWStringGoString(walletMnemonic))
-
-// 	// get ETH private key for wallet
-// 	key := C.TWHDWalletGetKeyForCoin(wallet, C.TWCoinTypeEthereum)
-// 	keyData := C.TWPrivateKeyData(key)
-
-// 	// encode private key for ETH from wallet key to String
-// 	keyHex := hex.EncodeToString(TWDataGoBytes(keyData))
-// 	// fmt.Println("<== ethereum private key: ", keyHex)
-
-// 	r.ETHPrivateKey = keyHex
-
-// 	// validate private key
-// 	is_valid_priv := C.TWPrivateKeyIsValid(keyData, C.TWCurveSECP256k1)
-// 	// fmt.Println("IsValid ETH Private Key", is_valid_priv)
-
-// 	r.IsValidETHPrivateKey = bool(is_valid_priv)
-// 	// fmt.Printf("is_valid_priv %T\n", is_valid_priv)
-
-// 	//TODO: encrypt private key
-
-// 	// generate ETH address
-// 	address := C.TWHDWalletGetAddressForCoin(wallet, C.TWCoinTypeEthereum)
-// 	// fmt.Println("<== ethereum address: ", TWStringGoString(address))
-
-// 	r.ETHAddress = TWStringGoString(address)
-
-// 	// fmt.Println(seedStruct)
-
-	
-// 	newWallet := m.Wallet{
-// 		Mnemonic: r.Mnemonic,
-// 		IsValidMnemonic: r.IsValidMnemonic,
-// 		ConfirmMnemonic: r.ConfirmMnemonic,
-// 		Seed: r.Seed,
-// 		ETHAddress: r.ETHAddress,
-// 		ETHPrivateKey: r.ETHPrivateKey,
-// 		IsValidETHPrivateKey: r.IsValidETHPrivateKey,
-// 	}
-
-// 	return newWallet
-// }
 
 var InfuraUrl = "https://kovan.infura.io/v3/342f979e9d594a0ea51404cf3841eafa"
 // var ganacheUrl = "HTTP://127.0.0.1:8545"
 
 func CreateWallet() (*string, error) {
 	// create wallet and return wallet mnemonic
-	mnemonic, err := GenerateMnemonic()
+	mnemonic, err := h.GenerateMnemonic()
 	if err != nil {
 		return nil, err
 	}
 
 	// convert mnemonic from Go String to C.TWString
-	str := TWStringCreateWithGoString(*mnemonic);
-	empty := TWStringCreateWithGoString("")
+	str := h.TWStringCreateWithGoString(*mnemonic);
+	empty := h.TWStringCreateWithGoString("")
 	defer C.TWStringDelete(str)
 	defer C.TWStringDelete(empty)
 
 	// verify if mnemonic is valid
-	isValidMnemonic := MnemonicIsValid(*mnemonic)
+	isValidMnemonic := h.MnemonicIsValid(*mnemonic)
 	if isValidMnemonic == false {
 		return nil, errors.New("Invalid Mnemonic")
 	}
@@ -258,13 +73,13 @@ func CreateWallet() (*string, error) {
 }
 
 func ImportWallet(mnemonic string) error {
-	isValidMnemonic := MnemonicIsValid(mnemonic)
+	isValidMnemonic := h.MnemonicIsValid(mnemonic)
 	if isValidMnemonic == false {
 		return errors.New("Invalid Mnemonics")
 	}
 
-	str := TWStringCreateWithGoString(mnemonic);
-	empty := TWStringCreateWithGoString("")
+	str := h.TWStringCreateWithGoString(mnemonic);
+	empty := h.TWStringCreateWithGoString("")
 	defer C.TWStringDelete(str)
 	defer C.TWStringDelete(empty)
 
@@ -272,96 +87,70 @@ func ImportWallet(mnemonic string) error {
 	defer C.TWHDWalletDelete(wallet)
 
 	walletMnemonic := C.TWHDWalletMnemonic(wallet)
-	if mnemonic != TWStringGoString(walletMnemonic) {
+	if mnemonic != h.TWStringGoString(walletMnemonic) {
 		return errors.New("Mnemonics does'nt match")
 	}
 
 	return nil
 }
 
-func GetCoinAddressForAWallet(mnemonic string) (map[string]string, error) {
+func CoinList() []string {
+	coins := []string{
+		"AE",	"AION", "BNB","BTC","BTG","CLO","ADA","ATOM","DASH","DCR","DGB","DOGE","EOS","ETH","ETC",
+		"FIO","GO","GRS","ICX","IOTX","KAVA","KIN","LTC","MONA","NAS","NULS","NANO","NEAR","NIM","ONT","POA",
+		"QTUM","XRP","SOL","XLM","XTZ","THETA","TT","NEO","TOMO","TRX","VET","VIA","WAN","ZEC","XZC","ZIL","FLUX",
+		"RVN","WAVES","LUNA","ONE","ALGO","KSM","DOT","FIL","ERD","BAND","ROSE","MATIC","RUNE","BNT",
+	}
+	return coins
+}
+
+func GetCoinAddressForAWallet(mnemonic string, coinType string) (map[string]string, error) {
 	fmt.Println("Fetching coin address for wallet")
 	coins := map[string]uint32{
-		"AE": C.TWCoinTypeAeternity,
-		"AION": C.TWCoinTypeAion,
-		"BNB":  C.TWCoinTypeBinance,
-		"BTC":  C.TWCoinTypeBitcoin,
-		"BTG":  C.TWCoinTypeBitcoinGold,
-		"CLO":  C.TWCoinTypeCallisto,
-		"ADA":  C.TWCoinTypeCardano,
-		"ATOM":  C.TWCoinTypeCosmos,
-		"DASH":  C.TWCoinTypeDash,
-		"DCR":  C.TWCoinTypeDecred,
-		"DGB":  C.TWCoinTypeDigiByte,
-		"DOGE":  C.TWCoinTypeDogecoin,
-		"EOS":  C.TWCoinTypeEOS,
-		"ETH":  C.TWCoinTypeEthereum,
-		"ETC":  C.TWCoinTypeEthereumClassic,
-		"FIO":  C.TWCoinTypeFIO,
-		"GO":  C.TWCoinTypeGoChain,
-		"GRS":  C.TWCoinTypeGroestlcoin,
-		"ICX":  C.TWCoinTypeICON,
-		"IOTX":  C.TWCoinTypeIoTeX,
-		"KAVA":  C.TWCoinTypeKava,
-		"KIN":  C.TWCoinTypeKin,
-		"LTC":  C.TWCoinTypeLitecoin,
-		"MONA":  C.TWCoinTypeMonacoin,
-		"NAS":  C.TWCoinTypeNebulas,
-		"NULS":  C.TWCoinTypeNULS,
-		"NANO":  C.TWCoinTypeNano,
-		"NEAR":  C.TWCoinTypeNEAR,
-		"NIM":  C.TWCoinTypeNimiq,
-		"ONT":  C.TWCoinTypeOntology,
-		"POA":  C.TWCoinTypePOANetwork,
-		"QTUM":  C.TWCoinTypeQtum,
-		"XRP":  C.TWCoinTypeXRP,
-		"SOL":  C.TWCoinTypeSolana,
-		"XLM":  C.TWCoinTypeStellar,
-		"XTZ":  C.TWCoinTypeTezos,
-		"THETA":  C.TWCoinTypeTheta,
-		"TT":  C.TWCoinTypeThunderToken,
-		"NEO":  C.TWCoinTypeNEO,
-		"TOMO":  C.TWCoinTypeTomoChain,
-		"TRX":  C.TWCoinTypeTron,
-		"VET":  C.TWCoinTypeVeChain,
-		"VIA":  C.TWCoinTypeViacoin,
-		"WAN":  C.TWCoinTypeWanchain,
-		"ZEC":  C.TWCoinTypeZcash,
-		"XZC":  C.TWCoinTypeZcoin,
-		"ZIL":  C.TWCoinTypeZilliqa,
-		"FLUX":  C.TWCoinTypeZelcash,
-		"RVN":  C.TWCoinTypeRavencoin,
-		"WAVES":  C.TWCoinTypeWaves,
-		"LUNA":  C.TWCoinTypeTerra,
-		"ONE":  C.TWCoinTypeHarmony,
-		"ALGO":  C.TWCoinTypeAlgorand,
-		"KSM":  C.TWCoinTypeKusama,
-		"DOT":  C.TWCoinTypePolkadot,
-		"FIL":  C.TWCoinTypeFilecoin,
-		"ERD":  C.TWCoinTypeElrond,
-		"BAND":  C.TWCoinTypeBandChain,
-		"ROSE":  C.TWCoinTypeOasis,
-		"MATIC":  C.TWCoinTypePolygon,
-		"RUNE":  C.TWCoinTypeTHORChain,
-		"BNT":  C.TWCoinTypeBluzelle,
+		"AE": C.TWCoinTypeAeternity,"AION": C.TWCoinTypeAion,"BNB":  C.TWCoinTypeBinance,"BTC":  C.TWCoinTypeBitcoin,"BTG":  C.TWCoinTypeBitcoinGold,"CLO":  C.TWCoinTypeCallisto,
+		"ADA":  C.TWCoinTypeCardano,"ATOM":  C.TWCoinTypeCosmos,"DASH":  C.TWCoinTypeDash,"DCR":  C.TWCoinTypeDecred,"DGB":  C.TWCoinTypeDigiByte,"DOGE":  C.TWCoinTypeDogecoin,"EOS":  C.TWCoinTypeEOS,
+		"ETH":  C.TWCoinTypeEthereum,"ETC":  C.TWCoinTypeEthereumClassic,"FIO":  C.TWCoinTypeFIO,"GO":  C.TWCoinTypeGoChain,"GRS":  C.TWCoinTypeGroestlcoin,"ICX":  C.TWCoinTypeICON,"IOTX":  C.TWCoinTypeIoTeX,"KAVA":  C.TWCoinTypeKava,
+		"KIN":  C.TWCoinTypeKin,"LTC":  C.TWCoinTypeLitecoin,"MONA":  C.TWCoinTypeMonacoin,"NAS":  C.TWCoinTypeNebulas,"NULS":  C.TWCoinTypeNULS,"NANO":  C.TWCoinTypeNano,"NEAR":  C.TWCoinTypeNEAR,"NIM":  C.TWCoinTypeNimiq,"ONT":  C.TWCoinTypeOntology,
+		"POA":  C.TWCoinTypePOANetwork,"QTUM":  C.TWCoinTypeQtum,"XRP":  C.TWCoinTypeXRP,"SOL":  C.TWCoinTypeSolana,"XLM":  C.TWCoinTypeStellar,"XTZ":  C.TWCoinTypeTezos,"THETA":  C.TWCoinTypeTheta,"TT":  C.TWCoinTypeThunderToken,"NEO":  C.TWCoinTypeNEO,
+		"TOMO":  C.TWCoinTypeTomoChain,"TRX":  C.TWCoinTypeTron,"VET":  C.TWCoinTypeVeChain,"VIA":  C.TWCoinTypeViacoin,"WAN":  C.TWCoinTypeWanchain,"ZEC":  C.TWCoinTypeZcash,"XZC":  C.TWCoinTypeZcoin,"ZIL":  C.TWCoinTypeZilliqa,"FLUX":  C.TWCoinTypeZelcash,"RVN":  C.TWCoinTypeRavencoin,
+		"WAVES":  C.TWCoinTypeWaves,"LUNA":  C.TWCoinTypeTerra,"ONE":  C.TWCoinTypeHarmony,"ALGO":  C.TWCoinTypeAlgorand,"KSM":  C.TWCoinTypeKusama,"DOT":  C.TWCoinTypePolkadot,"FIL":  C.TWCoinTypeFilecoin,"ERD":  C.TWCoinTypeElrond,
+		"BAND":  C.TWCoinTypeBandChain,"ROSE":  C.TWCoinTypeOasis,"MATIC":  C.TWCoinTypePolygon,"RUNE":  C.TWCoinTypeTHORChain,"BNT":  C.TWCoinTypeBluzelle,
 	}
 
-	str := TWStringCreateWithGoString(mnemonic);
-	empty := TWStringCreateWithGoString("")
+	str := h.TWStringCreateWithGoString(mnemonic);
+	empty := h.TWStringCreateWithGoString("")
 	defer C.TWStringDelete(str)
 	defer C.TWStringDelete(empty)
 	wallet := C.TWHDWalletCreateWithMnemonic(str, empty)
 	defer C.TWHDWalletDelete(wallet)
 
-	var addresses = make(map[string]string)
-
+	
+	var addressMap = make(map[string]string)
+	
 	// get address for coin 
-	for coin, element := range coins {
-		address := C.TWHDWalletGetAddressForCoin(wallet, element)
-		addressStr := TWStringGoString(address)
-		addresses[coin] = addressStr
-	}
-	return addresses, nil
+	// for coin, element := range coins {
+		address := C.TWHDWalletGetAddressForCoin(wallet, coins[coinType])
+		addressStr := h.TWStringGoString(address)
+		addressMap[coinType] = addressStr
+		
+		// GET BALANCE
+	// client,  err := ethclient.Dial(InfuraUrl)
+	// if err != nil {
+	// 	fmt.Println("Unable to connect to network:%v \n", err)
+	// 	return nil, err
+	// }
+	// account := common.HexToAddress(addressStr)
+	// balance, err := client.BalanceAt(context.Background(), account, nil)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// fbalance := new(big.Float)
+	// fbalance.SetString(balance.String())
+	// ethValue := new(big.Float).Quo(fbalance, big.NewFloat(math.Pow10(18)))
+	// fmt.Println(ethValue)
+	// }
+	return addressMap, nil
 }
 
 
@@ -374,8 +163,8 @@ func SendETH(mnemonic string, receiverAddressHex string, inAmount string)(interf
 		return nil, err
 	}
 
-	str := TWStringCreateWithGoString(mnemonic)
-	empty := TWStringCreateWithGoString("")
+	str := h.TWStringCreateWithGoString(mnemonic)
+	empty := h.TWStringCreateWithGoString("")
 	defer C.TWStringDelete(str)
 	defer C.TWStringDelete(empty)
 
@@ -385,7 +174,7 @@ func SendETH(mnemonic string, receiverAddressHex string, inAmount string)(interf
 	// prepair privatekey
 	key := C.TWHDWalletGetKeyForCoin(wallet, C.TWCoinTypeEthereum)
 	keyData := C.TWPrivateKeyData(key)
-	privateKey := hex.EncodeToString(TWDataGoBytes(keyData))
+	privateKey := hex.EncodeToString(h.TWDataGoBytes(keyData))
 
 
 	privateKeyECDSA, err := crypto.HexToECDSA(privateKey)
@@ -410,7 +199,7 @@ func SendETH(mnemonic string, receiverAddressHex string, inAmount string)(interf
 
 	// TODO: check balance against sending amount;
 	// check balance
-	balance, err := GetWeiBalance(fromAddress.String(), client);
+	balance, err := h.GetWeiBalance(fromAddress.String(), client);
 	fmt.Println("Balance: ", balance)
 	if err != nil {
 			log.Fatal("error while fetching sender address balance")
@@ -431,14 +220,14 @@ func SendETH(mnemonic string, receiverAddressHex string, inAmount string)(interf
 	t.Nonce = strconv.FormatUint(nonce, 10)
 
 	// convert amount
-	value, err := ParseBigFloat(inAmount)
+	value, err := h.ParseBigFloat(inAmount)
 	if err != nil {
 		return nil, errors.New("error while converting amount")
 	}
 	t.Amount = inAmount + "ETH"
 
 	// convert to wei
-	amount := etherToWei(value)
+	amount := h.EtherToWei(value)
 
 	gasLimit := uint64(21000)
 	gasPrice, err := client.SuggestGasPrice(context.Background())
@@ -477,8 +266,8 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 		return nil, err
 	}
 
-	str := TWStringCreateWithGoString(mnemonic)
-	empty := TWStringCreateWithGoString("")
+	str := h.TWStringCreateWithGoString(mnemonic)
+	empty := h.TWStringCreateWithGoString("")
 	defer C.TWStringDelete(str)
 	defer C.TWStringDelete(empty)
 
@@ -488,7 +277,7 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	// prepair privatekey
 	key := C.TWHDWalletGetKeyForCoin(wallet, C.TWCoinTypeEthereum)
 	keyData := C.TWPrivateKeyData(key)
-	privateKey := hex.EncodeToString(TWDataGoBytes(keyData))
+	privateKey := hex.EncodeToString(h.TWDataGoBytes(keyData))
 
 
 	privateKeyECDSA, err := crypto.HexToECDSA(privateKey)
@@ -525,7 +314,7 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	// }
 
 	// fmt.Printf("Token Balance: %s\n", bal)
-	balance, err := GetWeiBalance(fromAddress.String(), client);
+	balance, err := h.GetWeiBalance(fromAddress.String(), client);
 	fmt.Println("Balance: ", balance)
 	if err != nil {
 			log.Fatal("error while fetching sender address balance")
@@ -564,12 +353,12 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	fmt.Println("Padded Address: ",hexutil.Encode(paddedAddress))
 	
 	// convert amount
-	flaotAmount, err := ParseBigFloat(inAmount)
+	flaotAmount, err := h.ParseBigFloat(inAmount)
 	if err != nil {
 		return nil, errors.New("error while converting amount")
 	}
 	// convert to wei
-	amount := etherToWei(flaotAmount)
+	amount := h.EtherToWei(flaotAmount)
 	fmt.Println("Amount: ", amount, inAmount)
 	t.Amount = inAmount + token
 

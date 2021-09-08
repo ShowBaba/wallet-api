@@ -14,6 +14,25 @@ package helper
 */
 import "C"
 
+import (
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/tyler-smith/go-bip39"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
+
+	"math/big"
+	// "crypto/ecdsa"
+	// "bytes"
+	"unsafe"
+	"encoding/hex"
+	"fmt"
+	// "log"
+	// "errors"
+	"strings"
+	// "strconv"
+	"context"
+)
+
 // Go byte[] -> C.TWData
 func TWDataCreateWithGoBytes(d []byte) unsafe.Pointer {
 	cBytes := C.CBytes(d)
@@ -74,7 +93,7 @@ func ParseBigFloat(value string) (*big.Float, error) {
 }
 
 // convert eth to wei
-func etherToWei(eth *big.Float) *big.Int {
+func EtherToWei(eth *big.Float) *big.Int {
 	truncInt, _ := eth.Int(nil)
 	truncInt = new(big.Int).Mul(truncInt, big.NewInt(params.Ether))
 	fracStr := strings.Split(fmt.Sprintf("%.18f", eth), ".")[1]
@@ -83,3 +102,35 @@ func etherToWei(eth *big.Float) *big.Int {
 	wei := new(big.Int).Add(truncInt, fracInt)
 	return wei;
 }
+
+func FloatToBigInt(val float64) *big.Int {
+	bigval := new(big.Float)
+	bigval.SetFloat64(val)
+	// Set precision if required.
+	// bigval.SetPrec(64)
+
+	coin := new(big.Float)
+	coin.SetInt(big.NewInt(1000000000000000000))
+
+	bigval.Mul(bigval, coin)
+
+	result := new(big.Int)
+	bigval.Int(result) // store converted number in result
+
+	return result
+}
+
+func GenerateMnemonic() (*string, error) {
+	// Generate a mnemonic for memorization or user-friendly seeds
+	entropy, err := bip39.NewEntropy(128)
+	if err != nil {
+		return nil, err
+	}
+	mnemonic, err := bip39.NewMnemonic(entropy)
+	if err != nil {
+		return nil, err
+	}
+	return &mnemonic, nil
+}
+
+// func AvailableCoinList
