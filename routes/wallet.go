@@ -13,4 +13,6 @@ func WalletRoute(route fiber.Router) {
 	route.Post("/send/eth", c.SendETH)
 	route.Post("/send/erc20", c.SendERC20)
 	route.Get("/coin-list", c.CoinList)
+	route.Post("/send/bnb", c.SendBNB)
+	route.Post("/send/btc", c.SendBTC)
 }

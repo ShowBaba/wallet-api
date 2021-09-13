@@ -30,17 +30,40 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	// "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	// "github.com/ethereum/go-ethereum/params"
-	"golang.org/x/crypto/sha3"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
+	// bsc
+	bscClient "github.com/binance-chain/go-sdk/client"
+	// bscLedger "github.com/binance-chain/go-sdk/common/ledger"
+	bscTypes "github.com/binance-chain/go-sdk/common/types"
+	bscKeys "github.com/binance-chain/go-sdk/keys"
+	bscMsg "github.com/binance-chain/go-sdk/types/msg"
 	
+	// btc
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
+	// "github.com/blockcypher/gobcy"
+	"github.com/bitcoinsv/bsvd/bsvec"
+	bsvdChaincfg "github.com/bitcoinsv/bsvd/chaincfg"
+	"github.com/bitcoinsv/bsvutil"
+
+
+	"golang.org/x/crypto/sha3"
+	"github.com/btcsuite/btcutil/bech32"
 	"math/big"
 	"crypto/ecdsa"
-	// "bytes"
+	"bytes"
+	"net/http"
 	// "unsafe"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"errors"
+	"encoding/json"
+	"io/ioutil"
 	// "math"
 	// "strings"
 	"strconv"
@@ -124,8 +147,9 @@ func GetCoinAddressForAWallet(mnemonic string, coinType string) (map[string]stri
 	wallet := C.TWHDWalletCreateWithMnemonic(str, empty)
 	defer C.TWHDWalletDelete(wallet)
 
-	
+	// TODO: fetch balance for address
 	var addressMap = make(map[string]string)
+	// test()
 	
 	// get address for coin 
 	// for coin, element := range coins {
@@ -301,29 +325,62 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	t.From = fromAddress.String()
 
 	// TODO: check balance against sending amount;
-	// check balance
-	// ttokenAddress := common.HexToAddress("0x33c77ebbf799a46a3112ea3021b540afa4c3be27")
-	// instance, err := token.NewToken(ttokenAddress, client)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// taddress := common.HexToAddress("0x65D4E4A40f970304c24216BD1C86977B45D6d090")
-	// bal, err := instance.BalanceOf(&bind.CallOpts{}, taddress)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	// var ethResult interface{}
+	// var postBody interface{}
+	var balance = new(big.Int)
+	type ethHandlerResult struct {
+		Result string `json:"result"`
+		Error  struct {
+			Code    int64  `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	} 
 
-	// fmt.Printf("Token Balance: %s\n", bal)
-	balance, err := h.GetWeiBalance(fromAddress.String(), client);
-	fmt.Println("Balance: ", balance)
+	var ethResult = ethHandlerResult{}	
+
+	address := fromAddress.String()
+	data1 := crypto.Keccak256Hash([]byte("balanceOf(address)")).String()[0:10] + "000000000000000000000000" + address[2:]
+	postBody, _ := json.Marshal(map[string]interface{}{
+		"id":      1,
+		"jsonrpc": "2.0",
+		"method":  "eth_call",
+		"params": []interface{}{
+			map[string]string{
+				"to":   tokenAddress,
+				"data": data1,
+			},
+			"latest",
+		},
+	})
+	requestBody := bytes.NewBuffer(postBody)
+	resp, err := http.Post(InfuraUrl, "application/json", requestBody)
 	if err != nil {
-			log.Fatal("error while fetching sender address balance")
-			return nil, err
+		return nil, err
 	}
-	if balance.Cmp(big.NewInt(0)) == 0 {
-		fmt.Println(">>>>> Available balance = ", balance, " <<<<<")
-		return nil, errors.New("Insufficient funds")
+
+	if err := json.NewDecoder(resp.Body).Decode(&ethResult); err != nil {
+		return nil, err
 	}
+	balance.SetString(ethResult.Result[2:], 16)
+	convertedBalance := h.WeiToEther(balance)
+
+	// TODO: check amount against balance before sending Tx
+
+	// convert amount
+	flaotAmount, err := h.ParseBigFloat(inAmount)
+	if err != nil {
+		return nil, errors.New("error while converting amount")
+	}
+	// convert to wei
+	amount := h.EtherToWei(flaotAmount)
+	fmt.Println(balance, amount)
+	fmt.Printf("B: %T  A: %T\n", *balance, *amount)
+	
+	// if  amount > balance {
+		fmt.Println(">>>>> Available balance = ", convertedBalance, " <<<<<")
+	// 	return nil, errors.New("Insufficient funds")
+	// }
+	// fmt.Println("Balance === ", convertedBalance)
 
 	
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
@@ -347,23 +404,16 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(transferFnSignature)
 	methodID := hash.Sum(nil)[:4]
-	fmt.Println("Token MethodID: ",hexutil.Encode(methodID))
+	// fmt.Println("Token MethodID: ",hexutil.Encode(methodID))
 
 	paddedAddress := common.LeftPadBytes(toAddress.Bytes(), 32)
 	fmt.Println("Padded Address: ",hexutil.Encode(paddedAddress))
 	
-	// convert amount
-	flaotAmount, err := h.ParseBigFloat(inAmount)
-	if err != nil {
-		return nil, errors.New("error while converting amount")
-	}
-	// convert to wei
-	amount := h.EtherToWei(flaotAmount)
-	fmt.Println("Amount: ", amount, inAmount)
+	// fmt.Println("Amount: ", amount, inAmount)
 	t.Amount = inAmount + token
 
 	paddedAmount := common.LeftPadBytes(amount.Bytes(), 32)
-	fmt.Println("Padded Amount: ",hexutil.Encode(paddedAmount))
+	// fmt.Println("Padded Amount: ",hexutil.Encode(paddedAmount))
 
 	var data []byte
 	data = append(data, methodID...)
@@ -377,8 +427,9 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	// if err != nil {
 	// 	return nil, errors.New("Error estimating Gas Limit")
 	// }
+	// TODO: recheck gasLimit 
 	gasLimit := uint64(77380)
-	fmt.Println("gasLimit: ", gasLimit) 
+	// fmt.Println("gasLimit: ", gasLimit) 
 
 	tx := types.NewTransaction(nonce, common.HexToAddress(tokenAddress), value, gasLimit, gasPrice, data)
 
@@ -910,4 +961,350 @@ func SendSelectedToken(mnemonic string, receiverAddress string, inAmount string,
 		response, err := SendERC20s(tokenAddress, mnemonic, receiverAddress, inAmount, token);
 		return response, err
 	}
+}
+
+func SendBNB(mnemonic string, receiverAddress string, inAmount string) error {
+	// fetch wallet address for BNB
+	str := h.TWStringCreateWithGoString(mnemonic);
+	empty := h.TWStringCreateWithGoString("")
+	defer C.TWStringDelete(str)
+	defer C.TWStringDelete(empty)
+	wallet := C.TWHDWalletCreateWithMnemonic(str, empty)
+	defer C.TWHDWalletDelete(wallet)
+	
+	// get wallet's address for bnb
+	address := h.TWStringGoString(C.TWHDWalletGetAddressForCoin(wallet, C.TWCoinTypeBinance))
+
+	fmt.Println("Wallet address: ", address)
+
+	// ------ encode receiver address into bech32 format ----------- //
+	// TODO: extract encoder into helper file
+	data := []byte(receiverAddress)
+	// Convert  data to base32:
+	conv, err := bech32.ConvertBits(data, 8, 5, true)
+	if err != nil {
+			fmt.Println("Error:", err)
+	}
+	encodedReceiverAddr, err := bech32.Encode("tbnb", conv)  // TODO: change `tbnb` to `bnb` in production
+	if err != nil {
+			fmt.Println("Error:", err)
+	}
+
+	fmt.Println("Encoded Receiver Address: ", encodedReceiverAddr)
+
+	// Show the encoded data.
+	// hrp, decoded, err := bech32.Decode("tbnb1a2urtxxkjhgakrx7vldk4zkdd899fhjz74eys6")
+	// if err != nil {
+	// 		fmt.Println("Error:", err)
+	// }
+
+	// // Show the decoded data.
+	// fmt.Println("Decoded human-readable part:", hrp)
+	// fmt.Println("Decoded Test Data:", hex.EncodeToString(decoded))
+
+	// ------------------------------------------------------------ //
+	bscTypes.Network = bscTypes.TestNetwork
+
+	keyManager, err := bscKeys.NewMnemonicKeyManager(mnemonic)
+	if err != nil {
+		fmt.Println(err.Error(),)
+		return err
+	}
+
+	convertedReceiverAddr, err := bscTypes.AccAddressFromBech32(encodedReceiverAddr)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+
+	fmt.Println("Converted Address: ", convertedReceiverAddr)
+
+	// init dex client
+	dexClient, err := bscClient.NewDexClient("testnet-dex.binance.org:443", bscTypes.TestNetwork, keyManager)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+
+	account, err := dexClient.GetAccount(keyManager.GetAddr().String())
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	fmt.Println("Address from Keymanager: ", keyManager.GetAddr().String())
+
+	floatAmount := 0.0
+	for _, coin := range account.Balances {
+		if coin.Symbol == "BNB" {
+			fmt.Println(fmt.Sprintf("Your account has %s:BNB", coin.Free))
+			floatAmount, err = strconv.ParseFloat(coin.Free.String(), 64)
+			if err != nil {
+				fmt.Println(err.Error())
+				return err
+			}
+			break
+		}
+	}
+	if floatAmount <= 1.0 {
+		fmt.Println("Your account doesn't have enough bnb")
+	}
+
+	fmt.Println(fmt.Sprintf("Please verify sign key address (%s) and transaction data", bscTypes.AccAddress(keyManager.GetAddr()).String()))
+
+	//send transaction
+	sendResult, err := dexClient.SendToken([]bscMsg.Transfer{{convertedReceiverAddr, bscTypes.Coins{bscTypes.Coin{Denom: "BNB", Amount: 10000000}}}}, true)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+	fmt.Println(fmt.Sprintf("Send result: %t", sendResult.Ok))
+	return nil
+}
+
+// Sign BTC
+
+type BlockChairResp struct {
+	Address string	`json:"address"`
+	Total_received int	`json:"total_received"`
+	Total_sent int	`json:"total_send"`
+	Final_balance int64	`json:"final_balance"`
+	Txs []Tx
+}
+
+type Tx struct {
+	Hash string `json:"hash"`
+	Outputs []Output
+}
+
+type Output struct {
+	Script string `json:"script"`
+}
+
+func NewTx() (*wire.MsgTx, error) {
+	return wire.NewMsgTx(wire.TxVersion), nil
+}
+
+func GetUTXO(address string)(string, int64, string, error){
+	newURL := "https://api.blockcypher.com/v1/btc/test3/addrs/" + address + "/full?txlimit=1?token=c473279921c14dffbc2f5ea586bdf0be"
+	response, err := http.Get(newURL)
+	if err != nil {
+	fmt.Println("error in GetUTXO, http.Get")
+		return "", 0, "", err
+	}
+	defer response.Body.Close()
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		fmt.Println("error!")
+		return "", 0, "", err
+	}
+	var result BlockChairResp
+	json.Unmarshal(body, &result)
+	// fmt.Println(result)
+
+	if len(result.Txs) == 0 {
+		return "", 0, "", nil
+	}
+
+	previousTxid := result.Txs[0].Hash
+	balance := result.Final_balance
+	pubKeyScript := result.Txs[0].Outputs[0].Script
+	// fmt.Println(previousTxid, balance, pubKeyScript)
+	return previousTxid, balance, pubKeyScript, nil
+}
+
+func CreateTx(privKey string, destination string, amount int64)(interface{}, error){
+	var t m.BTCTransaction
+	t.To = destination
+	wif, err := btcutil.DecodeWIF(privKey)
+	if err != nil {
+		return "", err
+ 	}
+
+	addrPubKey, err := btcutil.NewAddressPubKey(wif.PrivKey.PubKey().SerializeUncompressed(), &chaincfg.TestNet3Params) //TODO: use MainNetParams for production
+	if err != nil {
+		return "", err
+	}
+
+	// fmt.Println(addrPubKey.EncodeAddress())
+	t.From = addrPubKey.EncodeAddress()
+
+	txid, balance, pkScript, err := GetUTXO(addrPubKey.EncodeAddress())
+	// fmt.Println(txid)
+	if err != nil {
+		return "", err
+	}
+
+	// checking for sufficiency of account
+	if balance < amount {
+		return "", fmt.Errorf("the balance of the account is not sufficient >> address(%s) balance: %d satoshis", addrPubKey.EncodeAddress(), balance)
+ 	}
+
+	 t.Amount = amount
+
+	// extracting destination address as []byte from function argument (destination string)
+	destinationAddr, err := btcutil.DecodeAddress(destination, &chaincfg.TestNet3Params)
+	if err != nil {
+		return "", err
+	}
+
+	destinationAddrByte, err := txscript.PayToAddrScript(destinationAddr)
+	if err != nil {
+		return "", err
+	}
+
+	redeemTx, err := NewTx()
+	if err != nil {
+		return "", err
+	}
+
+	utxoHash, err := chainhash.NewHashFromStr(txid)
+	if err != nil {
+		 return "", err
+	}
+	
+	// set arg according to transaction count
+	// 0 for initial and 1 for subsequent
+	outPoint := wire.NewOutPoint(utxoHash, wire.MinTxOutPayload)  //throws "Error validating transaction: witness script detected in tx without witness data." error when arg = 1
+	// making the input, and adding it to transaction
+	txIn := wire.NewTxIn(outPoint, nil, nil)
+	redeemTx.AddTxIn(txIn)
+
+	// adding the destination address and the amount to
+	// the transaction as output
+	redeemTxOut := wire.NewTxOut(amount, destinationAddrByte)
+	redeemTx.AddTxOut(redeemTxOut)
+
+	// now sign the transaction
+	finalRawTx, err := SignTx(privKey, pkScript, redeemTx)
+
+	// broadcast transaction
+	err = broadcastTx(finalRawTx)
+	if err != nil {
+		return "", err
+	}
+	
+	t.Hash = finalRawTx
+
+	return t, nil
+}
+
+func SignTx(privKey string, pkScript string, redeemTx *wire.MsgTx) (string, error) {
+
+	wif, err := btcutil.DecodeWIF(privKey)
+	if err != nil {
+		 return "", err
+	}
+
+	sourcePKScript, err := hex.DecodeString(pkScript)
+	if err != nil {
+		 return "", nil
+	}
+
+	// since there is only one input in our transaction
+	// we use 0 as second argument, if the transaction
+	// has more args, should pass related index
+	signature, err := txscript.SignatureScript(redeemTx, 0, sourcePKScript, txscript.SigHashAll, wif.PrivKey, false)
+	if err != nil {
+		 return "", nil
+	}
+
+	// since there is only one input, and want to add
+	// signature to it use 0 as index
+	redeemTx.TxIn[0].SignatureScript = signature
+
+	var signedTx bytes.Buffer
+	redeemTx.Serialize(&signedTx)
+
+	hexSignedTx := hex.EncodeToString(signedTx.Bytes())
+
+	return hexSignedTx, nil
+}
+
+type RTx struct {
+	Tx string `json:"tx"`
+}
+
+func broadcastTx(txHash string)(error){
+	fmt.Println(txHash)
+	body := &RTx{
+		Tx: txHash,
+	}
+	url := "https://api.blockcypher.com/v1/btc/test3/txs/push?token=c473279921c14dffbc2f5ea586bdf0be"
+
+	payloadBuf := new(bytes.Buffer)
+	json.NewEncoder(payloadBuf).Encode(body)
+	req, _ := http.NewRequest("POST", url, payloadBuf)
+	client := &http.Client{}
+	res, e := client.Do(req)
+	if e != nil {
+			return e
+	}
+
+	defer res.Body.Close()
+
+	fmt.Println("response Status:", res.Status)
+	if res.StatusCode != http.StatusCreated {
+		return fmt.Errorf("An error occured while broadcasting transaction hash!")
+	}
+	// body, err := ioutil.ReadAll(res.Body)
+	// bodyString := string(body)
+	// fmt.Println(bodyString)
+	return nil
+}
+
+// PrivateKeyToWif will convert a private key to a WIF (*bsvutil.WIF)
+func PrivateKeyToWif(privateKey string) (*bsvutil.WIF, error) {
+
+	// Missing private key
+	if len(privateKey) == 0 {
+		return nil, errors.New("missing privateKey")
+	}
+
+	// Decode the private key
+	decodedKey, err := hex.DecodeString(privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the private key from bytes
+	rawKey, _ := bsvec.PrivKeyFromBytes(bsvec.S256(), decodedKey)
+
+	// Create a new WIF (error never gets hit since (net) is set correctly)
+	return bsvutil.NewWIF(rawKey, &bsvdChaincfg.MainNetParams, false)
+}
+
+func SendBTC(mnemonic string, receiverAddress string, Amount int64)(interface{}, error){	
+	// --------------------------
+	// mnemonic := "resist since sell vast sleep liberty story sudden control diamond brain wrestle"
+	
+	str := h.TWStringCreateWithGoString(mnemonic)
+	empty := h.TWStringCreateWithGoString("")
+	defer C.TWStringDelete(str)
+	defer C.TWStringDelete(empty)
+	
+	wallet := C.TWHDWalletCreateWithMnemonic(str, empty)
+	defer C.TWHDWalletDelete(wallet)
+	
+	// prepair privatekey
+	key := C.TWHDWalletGetKeyForCoin(wallet, C.TWCoinTypeEthereum)
+	keyData := C.TWPrivateKeyData(key)
+	privateKey := hex.EncodeToString(h.TWDataGoBytes(keyData))
+		
+	// Convert private key to WIF 51 characters Base58
+	wif, err := PrivateKeyToWif(privateKey)
+	if err != nil {
+		// return "", err
+		return nil, err
+	}
+	
+	response, err := CreateTx(wif.String(),receiverAddress, Amount)
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	
+	// fmt.Println("response: ", response)
+
+	return response, nil
 }

@@ -103,6 +103,10 @@ func EtherToWei(eth *big.Float) *big.Int {
 	return wei;
 }
 
+func WeiToEther(wei *big.Int) *big.Float {
+	return new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(params.Ether))
+}
+
 func FloatToBigInt(val float64) *big.Int {
 	bigval := new(big.Float)
 	bigval.SetFloat64(val)

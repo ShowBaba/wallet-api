@@ -136,3 +136,53 @@ func CoinList(c *fiber.Ctx) error {
 		"payload": response,
 	})
 }
+
+func SendBNB(c *fiber.Ctx) error {
+	body := struct {
+		Mnemonic string `json:"mnemonic"`
+		ReceiverAddress string `json:"receiverAddress"`
+		Amount string `json:"amount"`
+	}{}
+	
+	if err := c.BodyParser(&body); err != nil {
+		return err
+	}
+
+	response := s.SendBNB(body.Mnemonic, body.ReceiverAddress, body.Amount)
+
+	// if err != nil {
+	// 	return c.Status(302).JSON(fiber.Map{
+	// 	"success":  false,
+	// 	"err": err.Error(),
+	// 	})
+	// }
+
+	return c.Status(201).JSON(fiber.Map{
+		"response": response,
+	})
+}
+
+func SendBTC(c *fiber.Ctx) error {
+	body := struct {
+		Mnemonic string `json:"mnemonic"`
+		ReceiverAddress string `json:"receiverAddress"`
+		Amount int64 `json:"amount"`
+	}{}
+	
+	if err := c.BodyParser(&body); err != nil {
+		return err
+	}
+
+	response, err := s.SendBTC(body.Mnemonic, body.ReceiverAddress, body.Amount)
+
+	if err != nil {
+		return c.Status(302).JSON(fiber.Map{
+		"success":  false,
+		"err": err.Error(),
+		})
+	}
+
+	return c.Status(201).JSON(fiber.Map{
+		"response": response,
+	})
+}
