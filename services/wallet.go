@@ -70,7 +70,8 @@ import (
 	"context"
 )
 
-var InfuraUrl = "https://kovan.infura.io/v3/342f979e9d594a0ea51404cf3841eafa"
+var InfuraUrl = "https://mainnet.infura.io/v3/f9cbc1ba4e27408b831c2adde76d2293" // mainnet
+// var InfuraUrl = "https://kovan.infura.io/v3/342f979e9d594a0ea51404cf3841eafa" // kovan testnet
 // var ganacheUrl = "HTTP://127.0.0.1:8545"
 
 func CreateWallet() (*string, error) {
@@ -229,11 +230,6 @@ func SendETH(mnemonic string, receiverAddressHex string, inAmount string)(interf
 			log.Fatal("error while fetching sender address balance")
 			return nil, err
 	}
-	if balance.Cmp(big.NewInt(0)) == 0 {
-		fmt.Println(">>>>> Available balance = ", balance, " <<<<<")
-		return nil, errors.New("Insufficient funds")
-	}
-
 	
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
@@ -252,7 +248,12 @@ func SendETH(mnemonic string, receiverAddressHex string, inAmount string)(interf
 
 	// convert to wei
 	amount := h.EtherToWei(value)
-
+	cmp := amount.Cmp(balance)
+	if  cmp == 1 {
+		fmt.Println(">>>>> Insufficient Funds - Available balance = ", balance, " <<<<<")
+		return nil, errors.New("Insufficient funds")
+	}
+	
 	gasLimit := uint64(21000)
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
@@ -362,7 +363,7 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 		return nil, err
 	}
 	balance.SetString(ethResult.Result[2:], 16)
-	convertedBalance := h.WeiToEther(balance)
+	// convertedBalance := h.WeiToEther(balance)
 
 	// TODO: check amount against balance before sending Tx
 
@@ -375,9 +376,15 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	amount := h.EtherToWei(flaotAmount)
 	fmt.Println(balance, amount)
 	fmt.Printf("B: %T  A: %T\n", *balance, *amount)
+	cmp := amount.Cmp(balance)
+	if  cmp == 1 {
+		fmt.Println(">>>>> Insufficient Funds - Available balance = ", balance, " <<<<<")
+		return nil, errors.New("Insufficient funds")
+	}
 	
 	// if  amount > balance {
-		fmt.Println(">>>>> Available balance = ", convertedBalance, " <<<<<")
+	// fmt.Println(">>>>> Available balance = ", convertedBalance, " <<<<<")
+	
 	// 	return nil, errors.New("Insufficient funds")
 	// }
 	// fmt.Println("Balance === ", convertedBalance)
@@ -456,7 +463,7 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 func SendSelectedToken(mnemonic string, receiverAddress string, inAmount string, token string)(interface{}, error){
 	switch token {
 	case "BNB":
-		fmt.Println("Selected Token: DAI")
+		fmt.Println("Selected Token: BNB")
 		tokenAddress := "0xB8c77482e45F1F44dE1745F52C74426C631bDD52"
 		response, err := SendERC20s(tokenAddress, mnemonic, receiverAddress, inAmount, token);
 		return response, err
@@ -820,6 +827,11 @@ func SendSelectedToken(mnemonic string, receiverAddress string, inAmount string,
 		tokenAddress := "0x3de7148c41e3b3233f3310e794f68d8e70ca69af"
 		response, err := SendERC20s(tokenAddress, mnemonic, receiverAddress, inAmount, token);
 		return response, err
+	case "LINK":
+		fmt.Println("Selected Token: LINK")
+		tokenAddress := "0x514910771af9ca656af840dff83e8264ecf986ca"
+		response, err := SendERC20s(tokenAddress, mnemonic, receiverAddress, inAmount, token);
+		return response, err
 	case "UBIN":
 		fmt.Println("Selected Token: UBIN")
 		tokenAddress := "0xb9EcEb9F717852Ad0D936B46155cB0c0f43cBE8E"
@@ -963,6 +975,120 @@ func SendSelectedToken(mnemonic string, receiverAddress string, inAmount string,
 	}
 }
 
+func GetETHAddressBalance(address string)(map[string]string, error){
+	tokenAddresses := map[string]string{
+		// "STK": "0x33c77ebbf799a46a3112ea3021b540afa4c3be27",
+		"DAI": "0x6b175474e89094c44da98b954eedeac495271d0f",
+		"USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+		"USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+		"BNB": "0xB8c77482e45F1F44dE1745F52C74426C631bDD52",
+		"LINK": "0x514910771af9ca656af840dff83e8264ecf986ca",
+		// "ENJ": "0xf629cbd94d3791c9250152bd8dfbdf380e2a3b9c",
+		// "SAND": "0x3845badAde8e6dFF049820680d1F14bD3903a5d0",
+		// "ANT": "0xa117000000f279d81a1d3cc75430faa017fa5a2e",
+		// "CLV": "0x80C62FE4487E1351b47Ba49809EBD60ED085bf52",
+		// "CHR": "0x8a2279d4a90b6fe1c4b30fa660cc9f926797baa2",
+		// "LIT": "0xb59490ab09a0f526cc7305822ac65f2ab12f9723",
+		// "NWC": "0x968f6f898a6df937fc1859b323ac2f14643e3fed",
+		// "RFOX": "0xa1d6df714f91debf4e0802a542e13067f31b8262",
+		// "TRU": "0x4c19596f5aaff459fa38b0f7ed92f11ae6543784",
+		// "DVI": "0x10633216e7e8281e33c86f02bf8e565a635d9770",
+		// "BEL": "0xa91ac63d040deb1b7a5e4d4134ad23eb0ba07e14",
+		// "EXRD": "0x6468e79A80C0eaB0F9A2B574c8d5bC374Af59414",
+		// "ASTA": "0xf2ddae89449b7d26309a5d54614b1fc99c608af5",
+		// "LOTTO": "0xb0dFd28d3CF7A5897C694904Ace292539242f858",
+		// "ERC20": "0xc3761eb917cd790b30dad99f6cc5b4ff93c4f9ea",
+		// "UNCX": "0xaDB2437e6F65682B85F814fBc12FeC0508A7B1D0",
+		// "CAPS": "0x03be5c903c727ee2c8c4e9bc0acc860cca4715e2",
+		// "AXIS": "0xF0c5831EC3Da15f3696B4DAd8B21c7Ce2f007f28",
+		// "PPAY": "0x054d64b73d3d8a21af3d764efd76bcaa774f3bb2",
+		// "DON": "0x217ddead61a42369a266f1fb754eb5d3ebadc88a",
+		// "HYVE": "0xd794DD1CAda4cf79C9EebaAb8327a1B0507ef7d4",
+		// "CBC": "0x26DB5439F651CAF491A87d48799dA81F191bDB6b",
+		// "MARK": "0x67c597624b17b16fb77959217360b7cd18284253",
+		// "MARSH": "0x5a666c7d92E5fA7Edcb6390E4efD6d0CDd69cF37",
+		// "XFT": "0xabe580e7ee158da464b51ee1a83ac0289622e6be",
+		// "UNISTAKE": "0x9ed8e7c9604790f7ec589f99b94361d8aab64e5e",
+		// "NOW": "0xe9a95d175a5f4c9369f3b74222402eb1b837693b",
+		// "FOC": "0x3051CFb958dcD408FBa70256073Adba943Fdf552",
+		// "UTU": "0xa58a4f5c4bb043d2cc1e170613b74e767c94189b",
+		// "AVT": "0x0d88ed6e74bbfd96b831231638b66c05571e824f",
+		// TODO: complete token address map
+	}
+
+	var balances = make(map[string]string)
+
+	client,  err := ethclient.Dial(InfuraUrl)
+	if err != nil {
+		fmt.Println("Unable to connect to network:%v \n", err)
+		return nil, err
+	}
+	
+	balance, err := h.GetWeiBalance(address, client);
+	if err != nil {
+		log.Fatal("error while fetching sender address balance")
+		return nil, err
+	}
+	conv := h.WeiToEther(balance)
+	balances["ETH"] = conv.String()
+	
+	for tokenSymbol, tokenAddress := range tokenAddresses {
+		// fmt.Println(tokenSymbol, tokenAddress)
+		balance, err := GetERC20TokenBalance(address, tokenAddress)
+		if err != nil {
+			balances[tokenSymbol] = "nil"
+		}
+		// fmt.Println("Balance: ", balance)
+		if balance == "0"{
+			continue
+		}
+		balances[tokenSymbol] = balance
+	}
+	fmt.Println(balances)
+	return balances, nil
+}
+
+func GetERC20TokenBalance(address string, tokenAddress string)(string, error) {
+	// get tokens balances
+	var balance = new(big.Int)
+	type ethHandlerResult struct {
+		Result string `json:"result"`
+		Error  struct {
+			Code    int64  `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	} 
+
+	var ethResult = ethHandlerResult{}	
+	data1 := crypto.Keccak256Hash([]byte("balanceOf(address)")).String()[0:10] + "000000000000000000000000" + address[2:]
+	postBody, _ := json.Marshal(map[string]interface{}{
+		"id":      1,
+		"jsonrpc": "2.0",
+		"method":  "eth_call",
+		"params": []interface{}{
+			map[string]string{
+				"to":   tokenAddress,
+				"data": data1,
+			},
+			"latest",
+		},
+	})
+	requestBody := bytes.NewBuffer(postBody)
+	resp, err := http.Post(InfuraUrl, "application/json", requestBody)
+	if err != nil {
+		return "", err
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&ethResult); err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	balance.SetString(ethResult.Result[2:], 16)
+	// convertedBalance := h.WeiToEther(balance)
+	
+	return balance.String(), nil
+}
+
 func SendBNB(mnemonic string, receiverAddress string, inAmount string) error {
 	// fetch wallet address for BNB
 	str := h.TWStringCreateWithGoString(mnemonic);
@@ -1085,6 +1211,7 @@ func NewTx() (*wire.MsgTx, error) {
 }
 
 func GetUTXO(address string)(string, int64, string, error){
+	fmt.Println(address)
 	newURL := "https://api.blockcypher.com/v1/btc/test3/addrs/" + address + "/full?txlimit=1?token=c473279921c14dffbc2f5ea586bdf0be"
 	response, err := http.Get(newURL)
 	if err != nil {
@@ -1108,7 +1235,7 @@ func GetUTXO(address string)(string, int64, string, error){
 	previousTxid := result.Txs[0].Hash
 	balance := result.Final_balance
 	pubKeyScript := result.Txs[0].Outputs[0].Script
-	// fmt.Println(previousTxid, balance, pubKeyScript)
+	fmt.Println(previousTxid, balance, pubKeyScript)
 	return previousTxid, balance, pubKeyScript, nil
 }
 
@@ -1151,6 +1278,7 @@ func CreateTx(privKey string, destination string, amount int64)(interface{}, err
 	if err != nil {
 		return "", err
 	}
+	// --------------------------------- //
 
 	redeemTx, err := NewTx()
 	if err != nil {
@@ -1162,9 +1290,7 @@ func CreateTx(privKey string, destination string, amount int64)(interface{}, err
 		 return "", err
 	}
 	
-	// set arg according to transaction count
-	// 0 for initial and 1 for subsequent
-	outPoint := wire.NewOutPoint(utxoHash, wire.MinTxOutPayload)  //throws "Error validating transaction: witness script detected in tx without witness data." error when arg = 1
+	outPoint := wire.NewOutPoint(utxoHash, 6)  //throws "Error validating transaction: witness script detected in tx without witness data." error when arg = 1
 	// making the input, and adding it to transaction
 	txIn := wire.NewTxIn(outPoint, nil, nil)
 	redeemTx.AddTxIn(txIn)
@@ -1186,6 +1312,11 @@ func CreateTx(privKey string, destination string, amount int64)(interface{}, err
 	t.Hash = finalRawTx
 
 	return t, nil
+
+	// ------------------------------------- //
+	// create new empty transaction
+	// redemTx := wire.NewMsgTx(wire.TxVersion)
+
 }
 
 func SignTx(privKey string, pkScript string, redeemTx *wire.MsgTx) (string, error) {

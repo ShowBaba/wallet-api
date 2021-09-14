@@ -128,6 +128,30 @@ func SendERC20(c *fiber.Ctx) error {
 	})
 }
 
+func ETHAddressBalance(c *fiber.Ctx) error {
+	body := struct {
+		Address string `json:"address"`
+	}{}
+
+	if err := c.BodyParser(&body); err != nil {
+		return err
+	}
+
+	response, err := s.GetETHAddressBalance(body.Address)
+
+	if err != nil {
+		return c.Status(302).JSON(fiber.Map{
+		"success":  false,
+		"err": err.Error(),
+		})
+	}
+
+	return c.Status(201).JSON(fiber.Map{
+		"success": true,
+		"balance": response,
+	})
+}
+
 func CoinList(c *fiber.Ctx) error {
 	response := s.CoinList()
 
