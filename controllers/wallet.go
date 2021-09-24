@@ -152,6 +152,33 @@ func ETHAddressBalance(c *fiber.Ctx) error {
 	})
 }
 
+/**
+	Returns the balance for a specified address and token type
+*/
+func ERC20TokenBalance(c *fiber.Ctx) error {
+	body := struct {
+		Address string `json:"address`
+		Token string `json:"token"`
+	}{}
+
+	if err := c.BodyParser(&body); err != nil {
+		return err
+	}
+
+	response, err := s.GetERC20TokenBalance(body.Address, body.Token)
+	if err != nil {
+		return c.Status(302).JSON(fiber.Map{
+		"success":  false,
+		"err": err.Error(),
+		})
+	}
+
+	return c.Status(201).JSON(fiber.Map{
+		"success": true,
+		"balance": response,
+	})
+}
+
 func CoinList(c *fiber.Ctx) error {
 	response := s.CoinList()
 

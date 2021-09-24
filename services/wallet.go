@@ -460,6 +460,13 @@ func SendERC20s(tokenAddress string, mnemonic string, receiverAddressHex string,
 	return t, nil
 }
 
+func AvailableERC20Tokens() []string {
+	tokens := []string{
+		"BNB", "USDT", "USDC", "DAI", "ENJ", "SAND", "ANT",  // TODO: complete available token list
+	}
+	return tokens
+}
+
 func SendSelectedToken(mnemonic string, receiverAddress string, inAmount string, token string)(interface{}, error){
 	switch token {
 	case "BNB":
@@ -1187,7 +1194,7 @@ func SendBNB(mnemonic string, receiverAddress string, inAmount string) error {
 	return nil
 }
 
-// Sign BTC
+//----------------------- Sign BTC --------------------//
 
 type BlockChairResp struct {
 	Address string	`json:"address"`
@@ -1212,7 +1219,7 @@ func NewTx() (*wire.MsgTx, error) {
 
 func GetUTXO(address string)(string, int64, string, error){
 	fmt.Println(address)
-	newURL := "https://api.blockcypher.com/v1/btc/test3/addrs/" + address + "/full?txlimit=1?token=c473279921c14dffbc2f5ea586bdf0be"
+	newURL := "https://api.blockcypher.com/v1/btc/test3/addrs/" + address + "/full?unspendOnly=true?txlimit=1?token=c473279921c14dffbc2f5ea586bdf0be"
 	response, err := http.Get(newURL)
 	if err != nil {
 	fmt.Println("error in GetUTXO, http.Get")
@@ -1235,7 +1242,7 @@ func GetUTXO(address string)(string, int64, string, error){
 	previousTxid := result.Txs[0].Hash
 	balance := result.Final_balance
 	pubKeyScript := result.Txs[0].Outputs[0].Script
-	fmt.Println(previousTxid, balance, pubKeyScript)
+	fmt.Println("UTXO Data = ", previousTxid, balance, pubKeyScript)
 	return previousTxid, balance, pubKeyScript, nil
 }
 
@@ -1273,8 +1280,19 @@ func CreateTx(privKey string, destination string, amount int64)(interface{}, err
 	if err != nil {
 		return "", err
 	}
+	
+	// extracting destination address as []byte from function argument (destination string)
+	changeAddr, err := btcutil.DecodeAddress("n3gzTHm7tXwvpjz7vnpYhoYDnCSSAKA37G", &chaincfg.TestNet3Params)
+	if err != nil {
+		return "", err
+	}
 
 	destinationAddrByte, err := txscript.PayToAddrScript(destinationAddr)
+	if err != nil {
+		return "", err
+	}
+	
+	changeAddrByte, err := txscript.PayToAddrScript(changeAddr)
 	if err != nil {
 		return "", err
 	}
@@ -1290,15 +1308,20 @@ func CreateTx(privKey string, destination string, amount int64)(interface{}, err
 		 return "", err
 	}
 	
-	outPoint := wire.NewOutPoint(utxoHash, 6)  //throws "Error validating transaction: witness script detected in tx without witness data." error when arg = 1
+	outPoint := wire.NewOutPoint(utxoHash, 0)  //throws "Error validating transaction: witness script detected in tx without witness data." error when arg = 1
 	// making the input, and adding it to transaction
 	txIn := wire.NewTxIn(outPoint, nil, nil)
 	redeemTx.AddTxIn(txIn)
 
 	// adding the destination address and the amount to
 	// the transaction as output
+	var outAmount int64
+	outAmount = 10
+	// TODO: get txs fee and return change to amount
 	redeemTxOut := wire.NewTxOut(amount, destinationAddrByte)
+	redeemTxOut2 := wire.NewTxOut(outAmount, changeAddrByte)
 	redeemTx.AddTxOut(redeemTxOut)
+	redeemTx.AddTxOut(redeemTxOut2)
 
 	// now sign the transaction
 	finalRawTx, err := SignTx(privKey, pkScript, redeemTx)
@@ -1427,8 +1450,10 @@ func SendBTC(mnemonic string, receiverAddress string, Amount int64)(interface{},
 		// return "", err
 		return nil, err
 	}
+	fmt.Println(wif.String())
 	
-	response, err := CreateTx(wif.String(),receiverAddress, Amount)
+	testPrivateKey := "92j7Pghj9T5BKXPCQRJk7XGpdiv51YU8JM56A2LXNUmAo7boMtE"
+	response, err := CreateTx(testPrivateKey, receiverAddress, Amount)
 
 	if err != nil {
 		fmt.Println(err)
