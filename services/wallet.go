@@ -71,8 +71,7 @@ import (
 )
 
 
-var InfuraUrl = "https://mainnet.infura.io/v3/f9cbc1ba4e27408b831c2adde76d2293" // mainnet
-// var InfuraUrl = "https://kovan.infura.io/v3/342f979e9d594a0ea51404cf3841eafa" // kovan testnet
+var InfuraUrl = "https://kovan.infura.io/v3/342f979e9d594a0ea51404cf3841eafa" // kovan testnet
 // var ganacheUrl = "HTTP://127.0.0.1:8545"
 
 func CreateWallet() (*string, error) {
