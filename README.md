@@ -103,3 +103,18 @@
     Content-Type: application/json
 
     {"response":{"from":"0x65D4E4A40f970304c24216BD1C86977B45D6d090","to":"0x7Cc21DAd3ED15807618bd5f387c811CC1df22783","amount":"1000STK","gasPrice":"","nonce":"31","hash":"0xd286db791d35703eeba4b61139cf65aa8d4ed2be8b4d0b67aacaa20db81a3ae0"}}}
+    
+    
+&nbsp;
+## Transfer BTC
+
+### Request
+
+`GET /send/erc20/`
+
+     curl --header "Content-Type: application/json" \
+    --request POST \
+    --data '{"mnemonic": "riot repair praise camera swim entry local setup arctic much bamboo creek",
+    "receiverAddress": "0x7Cc21DAd3ED15807618bd5f387c811CC1df22783",
+    "amount": "200"}' \
+    http://127.0.0.1:8080/api/send/btc
