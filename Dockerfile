@@ -40,7 +40,7 @@ ENV CXX=/usr/bin/clang++-10
 # ↓ Build and compile wallet core
 
 RUN mkdir wallet-core
-RUN git clone https://github.com/trustwallet/wallet-core.git wallet-core
+RUN git clone https://github.com/ShowBaba/wallet-core.git wallet-core
 WORKDIR /wallet-core
 
 ## RUN git clone https://github.com/ShowBaba/wallet-api.git
